@@ -10,6 +10,9 @@
 	</head>
   </head>
   <body>
+    <button id="btn">人脸纹理图</button>
+    <button id="btn1">人脸纹理图1</button>
+    <button id="btn2">mask 图</button>
     <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
     <script type="importmap">
       {
@@ -20,14 +23,36 @@
       }
     </script>
     <script type="module">
+
       import * as THREE from 'three';
-      import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
       import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
       import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-      import { LightProbeGenerator } from 'three/addons/lights/LightProbeGenerator.js';
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+      const textureLoader = new THREE.TextureLoader();
+      // 创建材质数组
+      const materials = [];
+      const texture = [
+          textureLoader.load('/public/BY_N_textured0.png'),
+          textureLoader.load('/public/BY_N_textured1.png'),
+          textureLoader.load('/public/BY_N_textured2.png'),
+      ];
+      const texture1 = [
+          textureLoader.load('/public/img_h_l.jpg'),
+          textureLoader.load('/public/img_h_m.jpg'),
+          textureLoader.load('/public/img_h_r.jpg'),
+      ];
+      const maskTexture = [
+          textureLoader.load('/public/mask_texture_l.png'),
+          textureLoader.load('/public/mask_texture_m.png'),
+          textureLoader.load('/public/mask_texture_r.png'),
+      ];
+        const maskTexture1 = [
+          textureLoader.load('/public/mask_upper_lid_lines_l.png'),
+          textureLoader.load('/public/mask_upper_lid_lines_m.png'),
+          textureLoader.load('/public/mask_upper_lid_lines_r.png'),
+      ];
 
       const renderer = new THREE.WebGLRenderer({alpha:true,antialias :true});
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -38,34 +63,46 @@
 
       const imageLoader = new THREE.ImageLoader();
 
-      const textureLoader = new THREE.TextureLoader();
-
       const loader = new OBJLoader();
       loader.load(
         '/public/BY_N_textured.obj',
         (object)=> {
           object.traverse(function (child) {
             if (child instanceof THREE.Mesh) {
-                // 创建材质数组
-                var materials = [];
-                // 加载多张图片
-                var textureUrls = [
-                    textureLoader.load('/public/BY_N_textured0.png'),
-                    textureLoader.load('/public/BY_N_textured1.png'),
-                    textureLoader.load('/public/BY_N_textured2.png')
-                ];
-
-                // 为每个面创建材质，并将图片贴上
+                 // 为每个面创建材质，并将图片贴上
                 for (let i = 0; i < child.geometry.groups.length; i++) {
-                    let material = new THREE.MeshStandardMaterial({ map: textureUrls[i] });
+                    let material = new THREE.ShaderMaterial({
+                        uniforms: {
+                            texture1: { value: texture[i] },
+                            texture2: { value: maskTexture[i] },
+                        },
+                        vertexShader: `
+                            varying vec2 vUv;
+                            void main() {
+                                vUv = uv;
+                                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                            }
+                        `,
+                        fragmentShader: `
+                            uniform sampler2D texture1;
+                            uniform sampler2D texture2;
+                            varying vec2 vUv;
+                            void main() {
+                                vec4 color1 = texture2D(texture1, vUv);
+                                vec4 color2 = texture2D(texture2, vUv);
+                                // 将maskTexture中的红色通道作为透明度
+                                float alpha = color2.r;
+                                // 设置纹理为红色
+                                vec4 redColor = vec4(1.0, 0.0, 0.0, 1.0);
+                                gl_FragColor = mix(color1,redColor, alpha); // 可以调整两个纹理的混合比例
+                            }
+                        `,
+                    });
                     materials.push(material);
                 }
                 child.material = materials;
             }
         });
-
-
-
           // compute the box that contains all the stuff
           // from root and below
           const box = new THREE.Box3().setFromObject(object);
@@ -79,7 +116,6 @@
           controls.maxDistance = boxSize * 10;
           controls.target.copy(boxCenter);
           controls.update();
-
           const color = 0xFFFFFF;
           const intensity = 1;
           const light = new THREE.DirectionalLight(color, intensity);
@@ -87,7 +123,6 @@
           scene.add(light);
           scene.add(light.target);
           scene.add(object)
-
         },
         // called when loading is in progresses
         function (xhr) {
@@ -98,11 +133,6 @@
           console.log('An error happened',error);
         }
       );
-
-
-
-
-
     const frameArea = (sizeToFitOnScreen, boxSize, boxCenter, camera)=> {
       const halfSizeToFitOnScreen = sizeToFitOnScreen * 0.5;
       const halfFovY = THREE.MathUtils.degToRad(camera.fov * .5);
@@ -133,6 +163,30 @@
         requestAnimationFrame(render)
       }
       render();
+      window.onload = ()=>{
+        document.querySelector('#btn').addEventListener('click',()=>{
+            // 更新材质的纹理
+          for (let i = 0; i < materials.length; i++) {
+              materials[i].uniforms.texture1.value = texture1[i];
+              materials[i].uniforms.texture2.value = maskTexture[i];
+          }
+        })
+        document.querySelector('#btn1').addEventListener('click',()=>{
+            // 更新材质的纹理
+          for (let i = 0; i < materials.length; i++) {
+              materials[i].uniforms.texture1.value = texture[i];
+              materials[i].uniforms.texture2.value = maskTexture[i];
+          }
+        })
+
+           document.querySelector('#btn2').addEventListener('click',()=>{
+            // 更新材质的纹理
+          for (let i = 0; i < materials.length; i++) {
+              materials[i].uniforms.texture1.value = texture[i];
+              materials[i].uniforms.texture2.value = maskTexture1[i];
+          }
+        })
+      }
     </script>
   </body>
 </html>
